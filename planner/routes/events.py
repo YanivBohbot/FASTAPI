@@ -1,8 +1,9 @@
 from typing import List
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from models.events import Event, EventUpdate
 from database.connections import Database
 from beanie import PydanticObjectId
+from auth.authenticate import authenticate
 
 
 event_router = APIRouter(tags=["Event"])
@@ -28,28 +29,43 @@ async def retrieve_event(id: PydanticObjectId) -> Event:
 
 
 @event_router.post("/new")
-async def create_event(body: Event) -> dict:
+async def create_event(body: Event, user: str = Depends(authenticate)) -> dict:
+    body.creator = user
     await events_database.save(body)
-    return {"message": "Event created succesufully"}
+    return {"message": "Event created successfully"}
 
 
 @event_router.delete("/{id}")
-async def delete_events(id: PydanticObjectId) -> dict:
-    event = await events_database.delete(id)
+async def delete_events(
+    id: PydanticObjectId, user: str = Depends(authenticate)
+) -> dict:
+    event = await events_database.get(id)
     if not event:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Event with supplied ID doest not exist",
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
         )
-    return {"message": "Event deleted success !"}
+    if event.creator != user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Operation not allowed"
+        )
+    event = await events_database.delete(id)
+
+    return {"message": "Event deleted successfully."}
 
 
 @event_router.put("/{id}", response_model=Event)
-async def update_event(id: PydanticObjectId, body: EventUpdate) -> Event:
-    update_event = await events_database.update(id, body)
-
-    if not update_event:
+async def update_event(
+    id: PydanticObjectId, body: EventUpdate, user: str = Depends(authenticate)
+) -> Event:
+    event = await events_database.get(id)
+    if event.creator != user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Event with id does not exist"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Operation not allowed"
         )
-    return update_event
+    updated_event = await events_database.update(id, body)
+    if not updated_event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Event with supplied ID does not exist",
+        )
+    return updated_event

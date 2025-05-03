@@ -4,12 +4,12 @@ from beanie import Document
 
 
 class Event(Document):
-    name: str
     title: str
     image: str
     description: str
     tags: List[str]
     location: str
+    name: Optional[str] = None  # ← make it optional if you want
 
     class Config:
         json_schema_extra = {

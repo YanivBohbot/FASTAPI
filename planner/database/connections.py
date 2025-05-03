@@ -8,12 +8,19 @@ from models.users import User
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: Optional[str] = None
+    DATABASE_URL: str
+    DB_NAME: str
+    SECRET_KEY: Optional[str] = None
 
-    async def initilize_database(self):
-        client = AsyncIOMotorClient(self.DATABASE_URL)
+    @classmethod
+    async def initialize_database(cls):
+        # create instance to access env vars
+        settings = cls()
+        client = AsyncIOMotorClient(settings.DATABASE_URL)
+        db = client[settings.DB_NAME]
+
         await init_beanie(
-            database=client.get_default_database(),
+            database=db,
             document_models=[Event, User],
         )
 
